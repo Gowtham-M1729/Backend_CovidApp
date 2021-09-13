@@ -60,15 +60,7 @@ api.add_resource(Data, "/country")
 def updateDatabase():
 
     print("Updating database ....")
-
-    globalTotal = 0
-    globalDeaths = 0
-    globalActive = 0
-    globalRecovered = 0
-
     countries = requests.get("https://api.covid19api.com/countries").json()
-    countrySummary = requests.get(
-        "https://api.covid19api.com/countries").json()['Countries']
     countries = sorted(countries, key=lambda c: c["Country"])
     BASE = "https://api.covid19api.com/total/country/"
 
@@ -88,11 +80,6 @@ def updateDatabase():
                 activeCases = countries_info[-1]['Active'] - \
                     countries_info[-2]['Active']
                 totalRecovered = totalConfirmed - (activeCases + totalDeaths)
-
-                globalActive += activeCases
-                globalDeaths += totalDeaths
-                globalRecovered += totalRecovered
-                globalTotal += totalConfirmed
 
             except Exception:
                 print("     " + country['Slug'])
@@ -114,7 +101,10 @@ def updateDatabase():
             print("Updated " + countryName)
             db.session.commit()
 
-    g_data = DataModel.query.filter_by(iso2='GBL').first()
+    print("Update complete ...")
+
+
+"""    g_data = DataModel.query.filter_by(iso2='GBL').first()
 
     if not g_data:
         g_data = DataModel(iso2='GBL', name="Global", confirmed=globalTotal,
@@ -125,10 +115,10 @@ def updateDatabase():
         g_data.confirmed = globalTotal
         g_data.deaths = globalDeaths
         g_data.active = globalActive
-        g_data.recovered = globalRecovered
-    db.session.commit()
+        g_data.recovered = globalRecovered 
 
-    print("Update complete ...")
+
+    db.session.commit() """
 
 
 @app.route('/reset')
