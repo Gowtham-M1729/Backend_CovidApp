@@ -16,6 +16,9 @@ api = Api(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 db = SQLAlchemy(app)
 
+get_args = reqparse.RequestParser()
+#get_args.add_argument("iso2", type=str, help="ISO2 required", required=True)
+
 
 class DataModel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -47,6 +50,28 @@ resource_fields = {
     'active': fields.Integer
 
 }
+
+
+class ItemList(Resource):
+    def get(self):
+        return {'items': country}
+
+
+class Data(Resource):
+    @marshal_with(resource_fields)
+    def get(self):
+        args = get_args.parse_args()
+        print(args)
+        c_iso2 = args["iso2"]
+        print(c_iso2)
+        result = DataModel.query.filter_by(iso2=c_iso2).first()
+        if not result:
+            abort(404, message="Country not found")
+        return result
+
+
+api.add_resource(Data, '/country')
+api.add_resource(ItemList, '/countries')
 
 
 def updateDatabase():
@@ -82,43 +107,6 @@ def reset():
     db.drop_all()
     db.create_all()
     return "Done"
-
-# routes
-
-
-@app.route('/country')
-def index():
-    try:
-        socks = DataModel.query.filter_by(
-            iso2='IN').order_by(DataModel.country).all()
-        sock_text = '<ul>'
-        for sock in socks:
-            sock_text += '<li>' + sock.country + \
-                ', ' + str(sock.active) + '</li>'
-        sock_text += '</ul>'
-        return sock_text
-    except Exception as e:
-        # e holds description of the error
-        error_text = "<p>The error:<br>" + str(e) + "</p>"
-        hed = '<h1>Something is broken.</h1>'
-        return hed + error_text
-
-
-@app.route('/')
-def countryinfo():
-    try:
-        socks = DataModel.query.order_by(DataModel.country).all()
-        sock_text = '<ul>'
-        for sock in socks:
-            sock_text += '<li>' + sock.country + \
-                ', ' + str(sock.active) + '</li>'
-        sock_text += '</ul>'
-        return sock_text
-    except Exception as e:
-        # e holds description of the error
-        error_text = "<p>The error:<br>" + str(e) + "</p>"
-        hed = '<h1>Something is broken.</h1>'
-        return hed + error_text
 
 
 if __name__ == "__main__":
