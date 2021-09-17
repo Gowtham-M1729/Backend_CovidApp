@@ -1,6 +1,6 @@
-from flask import Flask, send_file
+from flask import Flask, send_file, jsonify
 from flask_restful import Api, Resource, abort, marshal_with, fields, reqparse
-from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy, inspect
 import requests
 import json
 import matplotlib.pyplot as plt
@@ -15,6 +15,13 @@ app = Flask(__name__)
 api = Api(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 db = SQLAlchemy(app)
+
+parser = reqparse.RequestParser()
+parser.add_argument('price',
+                    type=float,
+                    required=True,
+                    help="This field cannot be left blank!"
+                    )
 
 
 class DataModel(db.Model):
@@ -32,6 +39,9 @@ class DataModel(db.Model):
 
     def __repr__(self):
         return f"Data(name = {country},iso2={iso2},slug={slug} ,newconfiremd = {newConfirmed}, newdeaths = {newDeaths}, newrecovered = {newRecovered},totalconfirmed={totalConfirmed},totalrecovered={totalRecovered},totaldeaths={totalDeaths},active = {active})"
+
+    def dict(self):
+        return {c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs}
 
 
 resource_fields = {
@@ -86,28 +96,41 @@ def reset():
 # routes
 
 
+# @app.route('/country')
+# def index():
+#     try:
+#         socks = DataModel.query.filter_by(
+#             iso2='IN').order_by(DataModel.country).all()
+#         sock_text = '<ul>'
+#         for sock in socks:
+#             sock_text += '<li>' + sock.country + \
+#                 ', ' + str(sock.active) + '</li>'
+#         sock_text += '</ul>'
+#         return sock_text
+#     except Exception as e:
+#         # e holds description of the error
+#         error_text = "<p>The error:<br>" + str(e) + "</p>"
+#         hed = '<h1>Something is broken.</h1>'
+#         return hed + error_text
+
 @app.route('/country')
 def index():
     try:
-        socks = DataModel.query.filter_by(
-            iso2='IN').order_by(DataModel.country).all()
-        sock_text = '<ul>'
-        for sock in socks:
-            sock_text += '<li>' + sock.country + \
-                ', ' + str(sock.active) + '</li>'
-        sock_text += '</ul>'
-        return sock_text
+        data = DataModel.query.all()
+        # print(data)
+        return jsonify([x.dict() for x in data])
+        for d in data:
+            print(d.json())
     except Exception as e:
-        # e holds description of the error
-        error_text = "<p>The error:<br>" + str(e) + "</p>"
-        hed = '<h1>Something is broken.</h1>'
-        return hed + error_text
+        return e
+    return ""
 
 
-@app.route('/')
+@app.route('/country<String Country Code>')
 def countryinfo():
     try:
-        socks = DataModel.query.order_by(DataModel.country).all()
+        socks = DataModel.query.filter_by(
+            iso2='IN').order_by(DataModel.country).all()
         sock_text = '<ul>'
         for sock in socks:
             sock_text += '<li>' + sock.country + \

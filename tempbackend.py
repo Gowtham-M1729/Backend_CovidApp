@@ -1,10 +1,9 @@
-from flask import Flask, send_file
-from flask_restful import Api, Resource, abort, marshal_with, fields, reqparse
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, send_file, jsonify
+from flask_sqlalchemy import SQLAlchemy, inspect
 import requests
 import json
-import matplotlib.pyplot as plt
 import threading
+from requests.sessions import session
 import schedule
 import time
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -12,12 +11,8 @@ import atexit
 import os
 
 app = Flask(__name__)
-api = Api(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 db = SQLAlchemy(app)
-
-get_args = reqparse.RequestParser()
-#get_args.add_argument("iso2", type=str, help="ISO2 required", required=True)
 
 
 class DataModel(db.Model):
@@ -34,44 +29,10 @@ class DataModel(db.Model):
     active = db.Column(db.Integer, nullable=False)
 
     def __repr__(self):
-        return f"Data(name = {country},iso2={iso2},slug={slug} ,newconfiremd = {newConfirmed}, newdeaths = {newDeaths}, newrecovered = {newRecovered},totalconfirmed={totalConfirmed},totalrecovered={totalRecovered},totaldeaths={totalDeaths},active = {active})"
+        return f"Data(name = {self.country},iso2={self.iso2},slug={self.slug} ,newconfiremd = {self.newConfirmed}, newdeaths = {self.newDeaths}, newrecovered = {self.newRecovered},totalconfirmed={self.totalConfirmed},totalrecovered={self.totalRecovered},totaldeaths={self.totalDeaths},active = {self.active})"
 
-
-resource_fields = {
-    'iso2': fields.String,
-    'country': fields.String,
-    'slug': fields.String,
-    'newConfirmed': fields.Integer,
-    'totalConfirmed': fields.Integer,
-    'totalDaeths': fields.Integer,
-    'newDeaths': fields.Integer,
-    'totalRecovered': fields.Integer,
-    'newRecovered': fields.Integer,
-    'active': fields.Integer
-
-}
-
-
-class ItemList(Resource):
-    def get(self):
-        return {'items': country}
-
-
-class Data(Resource):
-    @marshal_with(resource_fields)
-    def get(self):
-        args = get_args.parse_args()
-        print(args)
-        c_iso2 = args["iso2"]
-        print(c_iso2)
-        result = DataModel.query.filter_by(iso2=c_iso2).first()
-        if not result:
-            abort(404, message="Country not found")
-        return result
-
-
-api.add_resource(Data, '/country')
-api.add_resource(ItemList, '/countries')
+    def dict(self):
+        return {c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs}
 
 
 def updateDatabase():
@@ -81,7 +42,7 @@ def updateDatabase():
     lst_countrysummary = (requests.get(
         "https://api.covid19api.com/summary")).json()
     lst = lst_countrysummary["Countries"]
-    countries = sorted(lst, key=lambda c: c["NewConfirmed"])
+    #countries = sorted(lst, key=lambda c: c["NewConfirmed"])
     globaldata = lst_countrysummary['Global']
 
     for i in lst:
@@ -89,6 +50,7 @@ def updateDatabase():
          date) = i['Country'], i['CountryCode'], i['Slug'], i['NewConfirmed'], i['TotalConfirmed'], i['NewDeaths'], i['TotalDeaths'], i['NewRecovered'], i['TotalRecovered'], i['Date']
 
         countries_info = requests.get(BASE + countrycode).json()
+        # print(countries_info)
         activeCases = countries_info[-1]['Active'] - \
             countries_info[-2]['Active']
 
@@ -98,6 +60,7 @@ def updateDatabase():
 
         print("Updated " + country)
         db.session.commit()
+        # time.sleep(1)
 
     print("Update complete ...")
 
@@ -107,6 +70,36 @@ def reset():
     db.drop_all()
     db.create_all()
     return "Done"
+
+
+@app.route('/countryList')
+def countrylist():
+    try:
+        lst = []
+        result = list(DataModel.query.with_entities(DataModel.country))
+        for i in result:
+            lst.append(i[0])
+        return json.dumps(lst)
+    except Exception as e:
+        return str(e)
+
+
+@app.route('/country')
+def index():
+    try:
+        data = DataModel.query.all()
+        return jsonify([x.dict() for x in data])
+    except Exception as e:
+        return str(e)
+
+
+@app.route('/country/<string:name>')
+def countryinfo(name):
+    try:
+        data = DataModel.query.filter(DataModel.country == name).first()
+        return(jsonify(data.dict()))
+    except:
+        return jsonify({'message': 'Country info not found'})
 
 
 if __name__ == "__main__":
